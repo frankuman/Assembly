@@ -125,7 +125,7 @@ find_max:
         CMP r6, #0 // if 0 we finito
         BEQ finish //move to finished if 0
         CMP r5, r6 // compare first and second int
-        MOVLT r5,r6 //if higher, make r6 r5
+        MOVLT r5,r6 //if less than, make r6 r5
         b _loop1 //loop again
         
 
