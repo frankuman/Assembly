@@ -1,4 +1,6 @@
 // Constants
+//Oliver Bölin & Philippe Van Daele
+
 .equ UART_BASE, 0xff201000     // UART base address
 .equ STACK_BASE, 0x10000000		// stack beginning
 

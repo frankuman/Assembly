@@ -5,6 +5,7 @@
 @ else{
 @     return(1);
 @ }
+//Oliver Bölin & Philippe Van Daele
 numbers: //Our list, end with 0
     .word   1,2,3,4,5,6,7,8,9,10,0
 

@@ -1,4 +1,5 @@
 .data
+//Oliver Bölin & Philippe Van Daele
 numbers:
     .word 2, 3, 8, 3, 9, 12, 0
 sum:
