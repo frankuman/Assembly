@@ -1,7 +1,6 @@
 /******************************************************************************
     Define symbols
 ******************************************************************************/
-
 // Proposed interrupt vector base address
 .equ INTERRUPT_VECTOR_BASE, 0x00000000
 
@@ -14,8 +13,8 @@
 .equ GIC_DISTRIBUTOR_BASE, 0xFFFED000
 
 // Other I/O device base addresses
-.equ RED_LIGHT, 0xFF200000 //FF200000 - FF20000F
-.equ BUTTON_1, 0xFF200050 //FF200050 - FF20005F 
+
+
 /* Data section, for global data/variables if needed. */
 .data
 
@@ -28,16 +27,8 @@
 *****************************************************************************/
 .org INTERRUPT_VECTOR_BASE  // Address of interrupt vector
 // Write your Interrupt Vector here
-    B SERVICE_SVC // software interrrupt vector
-.section .vectors, "ax"
-    B _start // reset vector
-    B SERVICE_UND // undefined instruction vector
-    B SERVICE_SVC // software interrrupt vector
-    B SERVICE_ABT_INST // aborted prefetch vector
-    B SERVICE_ABT_DATA // aborted data vector
-.word 0 // unused vector
-    B SERVICE_IRQ // IRQ interrupt vector
-    B SERVICE_FIQ // FIQ interrupt vector
+
+
 
 .global _start
 /*****************************************************************************************************
@@ -45,7 +36,7 @@
     ---------------
 
 On system startup some basic configuration is needed, in this case:
-    1. Setup stack pointers for each used processor mode'
+    1. Setup stack pointers for each used processor mode
     2. Configure the Generic Interrupt Controller (GIC). Use the given help function CONFIG_GIC!
     3. Configure the used I/O devices and enable them for interrupt
     4. Change to the processor mode for the main program loop (for example supervisor mode)
@@ -74,77 +65,14 @@ On system startup some basic configuration is needed, in this case:
  Example: "MRS CPSR_c R0" reads CPSR control bits for interrupts and processor mode into register R0.
 *****************************************************************************************************/
 // Write your system startup code here. Follow the steps in the description above!
-_start:
-    //1. Setup stack pointers for each used processor mode'
-    MOV R1, #0b11010010 // interrupts masked, MODE = IRQ
-    MSR CPSR_c, R1 // change to IRQ mode
-    LDR SP, =0xFFFFFFFF - 3 // set IRQ stack to A9 onchip memory
-    /* Change to SVC (supervisor) mode with interrupts disabled */
-    MOV R1, #0b11010011 // interrupts masked, MODE = SVC
-    MSR CPSR, R1 // change to supervisor mode
-    LDR SP, =0x3FFFFFFF - 3 // set SVC stack to top of DDR3 memory
-    
-    //2. Configure the Generic Interrupt Controller (GIC). Use the given help function CONFIG_GIC!
-    BL CONFIG_GIC
 
-    //3. Configure the used I/O devices and enable them for interrupt
-    LDR R0, =BUTTON_1 // pushbutton KEY base address
-    MOV R1, #0xF // set interrupt mask bits
-    STR R1, [R0, #0x8] // interrupt mask register (base + 8)
-    
-    //4. Change to the processor mode for the main program loop (for example supervisor mode)
-    MRS r0, CPSR
-    STMFD sp!, {r0}
-    MSR CPSR_c, #0x13
-
-    //5. Enable the processor interrupts (IRQ in our case)
-    MOV R0, #0b01010011 // IRQ unmasked, MODE = SVC
-    MSR CPSR_c, R0
-     //wait for interupt
-    loop:
-        b loop
-        LDMFD sp!, {r0}
-        MSR CPSR_cxsf, r0
 
 
 /*******************************************************************
-Main program
+ Main program
 *******************************************************************/
 // Write code for your main program here
 
-KEY_ISR:
-    LDR R0, =0xFF200050 // base address of pushbutton KEY port
-    LDR R1, [R0, #0xC] // read edge capture register
-    MOV R2, #0xF
-    STR R2, [R0, #0xC] // clear the interrupt
-    LDR R0, =0xFF200020 // based address of HEX display
-CHECK_KEY0: // key to go UP in value. Ex 0,1,2,...,0,F
-    MOV R3, #0x1
-    ANDS R3, R3, R1 // check for KEY0
-    BEQ CHECK_KEY1
-    MOV R2, #0b00111111
-    STR R2, [R0] // display "0"
-    B END_KEY_ISR
-CHECK_KEY1: // key to go DOWN in value. Ex F,0,E, ... ,1,0
-    MOV R3, #0x2
-    ANDS R3, R3, R1 // check for KEY1
-    BEQ CHECK_KEY2
-    MOV R2, #0b00000110
-    STR R2, [R0] // display "1"
-    B END_KEY_ISR
-CHECK_KEY2:
-    MOV R3, #0x4
-    ANDS R3, R3, R1 // check for KEY2
-    BEQ IS_KEY3
-    MOV R2, #0b01011011
-    STR R2, [R0] // display "2"
-    B END_KEY_ISR
-IS_KEY3:
-    MOV R2, #0b01001111
-    STR R2, [R0] // display "3"
-
-END_KEY_ISR:
-	BX LR
 
 
 /*******************************************************************
@@ -181,37 +109,8 @@ Returning from an interrupt is done by using a special system level instruction:
 Finally, don't forget to push/pop registers used by this interrupt routine!
 
 *******************************************************************/
-/* Define the exception service routines */
-/*--- Undefined instructions --------------------------------------------------*/
-SERVICE_UND:
-    B SERVICE_UND
-/*--- Software interrupts -----------------------------------------------------*/
-SERVICE_SVC:
-    B SERVICE_SVC
-/*--- Aborted data reads ------------------------------------------------------*/
-SERVICE_ABT_DATA:
-    B SERVICE_ABT_DATA
-/*--- Aborted instruction fetch -----------------------------------------------*/
-SERVICE_ABT_INST:
-    B SERVICE_ABT_INST
-/*--- IRQ ---------------------------------------------------------------------*/
-
 // Write code for your IRQ interrupt service routine here
-SERVICE_IRQ:
-    PUSH {R0-R7, LR}
-    /* Read the ICCIAR from the CPU Interface */
-    LDR R4, =0xFFFEC100
-    LDR R5, [R4, #0x0C] // read from ICCIAR
-FPGA_IRQ1_HANDLER: //?????
-    CMP R5, #73
-UNEXPECTED:
-    BNE UNEXPECTED // if not recognized, stop here
-    BL KEY_ISR
-EXIT_IRQ:
-/* Write to the End of Interrupt Register (ICCEOIR) */
-    STR R5, [R4, #0x10] // write to ICCEOIR
-    POP {R0-R7, LR}
-    SUBS PC, LR, #4
+
 
 
 
@@ -225,10 +124,8 @@ These interrupt routines can just "idle" if ever called...
 ****************************************************************************/
 // Write code for your other interrupt service routines here
 
-//why
-SERVICE_FIQ:
-    B SERVICE_FIQ
-    //.end
+
+
 
 
 /*******************************************************************
@@ -278,33 +175,34 @@ Arguments:  R0 = Interrupt ID, N
 
 *********************************************************************/
 CONFIG_INTERRUPT:
-    PUSH {R4-R5, LR}
-    /* Configure Interrupt Set-Enable Registers (ICDISERn).
-    * reg_offset = (integer_div(N / 32) * 4
-    * value = 1 << (N mod 32) */
-    LSR R4, R0, #3 // calculate reg_offset
-    BIC R4, R4, #3 // R4 = reg_offset
-    LDR R2, =0xFFFED100 // Base address of ICDISERn
-    ADD R4, R2, R4 // R4 = address of ICDISER
-    AND R2, R0, #0x1F // N mod 32
-    MOV R5, #1 // enable
-    LSL R2, R5, R2 // R2 = value
-    /* Using the register address in R4 and the value in R2 set the
-    * correct bit in the GIC register */
-    LDR R3, [R4] // read current register value
-    ORR R3, R3, R2 // set the enable bit
-    STR R3, [R4] // store the new register value
-    /* Configure Interrupt Processor Targets Register (ICDIPTRn)
-    * reg_offset = integer_div(N / 4) * 4
-    * index = N mod 4 */
-    BIC R4, R0, #3 // R4 = reg_offset
-    LDR R2, =0xFFFED800 // Base address of ICDIPTRn
-    ADD R4, R2, R4 // R4 = word address of ICDIPTR
-    AND R2, R0, #0x3 // N mod 4
-    ADD R4, R2, R4 // R4 = byte address in ICDIPTR
-    /* Using register address in R4 and the value in R2 write to
-    * (only) the appropriate byte */
-    STRB R1, [R4]
-    POP {R4-R5, PC}
+PUSH {R4-R5, LR}
+/* Configure Interrupt Set-Enable Registers (ICDISERn).
+* reg_offset = (integer_div(N / 32) * 4
+* value = 1 << (N mod 32) */
+LSR R4, R0, #3 // calculate reg_offset
+BIC R4, R4, #3 // R4 = reg_offset
+LDR R2, =0xFFFED100 // Base address of ICDISERn
+ADD R4, R2, R4 // R4 = address of ICDISER
+AND R2, R0, #0x1F // N mod 32
+MOV R5, #1 // enable
+LSL R2, R5, R2 // R2 = value
+/* Using the register address in R4 and the value in R2 set the
+* correct bit in the GIC register */
+LDR R3, [R4] // read current register value
+ORR R3, R3, R2 // set the enable bit
+STR R3, [R4] // store the new register value
+/* Configure Interrupt Processor Targets Register (ICDIPTRn)
+* reg_offset = integer_div(N / 4) * 4
+* index = N mod 4 */
+BIC R4, R0, #3 // R4 = reg_offset
+LDR R2, =0xFFFED800 // Base address of ICDIPTRn
+ADD R4, R2, R4 // R4 = word address of ICDIPTR
+AND R2, R0, #0x3 // N mod 4
+ADD R4, R2, R4 // R4 = byte address in ICDIPTR
+/* Using register address in R4 and the value in R2 write to
+* (only) the appropriate byte */
+STRB R1, [R4]
+POP {R4-R5, PC}
+
 
 .end
