@@ -68,7 +68,7 @@ EXIT_IRQ:
 /*--- FIQ ---------------------------------------------------------------------*/
 SERVICE_FIQ:
     B SERVICE_FIQ
-    .end
+    //.end
 
 /*
 * Configure the Generic Interrupt Controller (GIC)
