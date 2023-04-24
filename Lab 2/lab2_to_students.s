@@ -1,6 +1,7 @@
 /******************************************************************************
     Define symbols
 ******************************************************************************/
+
 // Proposed interrupt vector base address
 .equ INTERRUPT_VECTOR_BASE, 0x00000000
 
@@ -14,65 +15,61 @@
 
 // Other I/O device base addresses
 .equ RED_LIGHT, 0xFF200000 //FF200000 - FF20000F
-.equ BUTTON_1, 0xFF200050 //FF200050 - FF20005F 
+.equ BUTTON_1, 0xFF200050 //FF200050 - FF20005F
 /* Data section, for global data/variables if needed. */
 .data
+hexValues: 
+    .byte 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07
+    .byte 0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71
+R11_value: .word 1
 
-
+my_device_base_address:
+    .word 0xFF200020
 /* Code section */
 .text
 
 /*****************************************************************************
     Interrupt Vector
 *****************************************************************************/
-.org INTERRUPT_VECTOR_BASE  // Address of interrupt vector
+
 // Write your Interrupt Vector here
-    B SERVICE_SVC // software interrrupt vector
 .section .vectors, "ax"
     B _start // reset vector
-.word 0 // unused vector
-    B SERVICE_IRQ // IRQ interrupt vector
-    B SERVICE_FIQ // FIQ interrupt vector
-
+    B SERVICE_UND // undefined instruction vector
+    B SERVICE_SVC // software interrrupt vector
+    B SERVICE_ABT_INST // aborted prefetch vector
+    B SERVICE_ABT_DATA // aborted data vector
+	.word 0 // unused vector
+    PUSH {R0-R11,R12, LR}
+    BL SERVICE_IRQ // IRQ interrupt vector
+    LDR R0, =0xFF200050 // base address of pushbutton KEY port
+    LDR R1, [R0, #0xC] // read edge capture register
+    MOV R2, #0xF
+    STR R2, [R0, #0xC] // clear the interrupt
+    LDR R0, =0xFF200020 // based address of HEX display
+    ANDS R3, R3, R1 // check for KEY0
+    LDR R11, =R11_value
+    LDR R9, [R11]
+    LDRB R4, [R12, R9]
+    STR R4,[R0]
+    ADD R9, #1
+    STR R9, [R11]
+    MOV R10,#0
+    POP {R0-R11,R12, LR}
+    SUBS PC, LR, #4
+	
+	
 .global _start
-/*****************************************************************************************************
-    System startup.
-    ---------------
 
-On system startup some basic configuration is needed, in this case:
-    1. Setup stack pointers for each used processor mode'
-    2. Configure the Generic Interrupt Controller (GIC). Use the given help function CONFIG_GIC!
-    3. Configure the used I/O devices and enable them for interrupt
-    4. Change to the processor mode for the main program loop (for example supervisor mode)
-    5. Enable the processor interrupts (IRQ in our case)
-    6. Start running the main program loop
-
- Your program will use two different processor modes when running:
- -Supervisor mode (SVC) when running the main program loop. Also default mode on reset.
- -IRQ mode when handling IRQ interrupts
-
- Changing processor mode and/or enabling/disabling interrupts control bits
- is done by updating the program status register (CPSR) control bits [7:0]
- 
- The CPSR register holds the processor mode control bits [4:0]:
-   10011 - Supervisor mode (SVC)
-   10010 - IRQ mode
- The CPSR register also holds the following interrupt control bits:
-   bit [7] IRQ enable/disable. 0 means IRQ enabled, 1 means IRQ disabled
-   bit [6] FIQ enable/disable. 0 means FIQ enabled, 1 means FIQ disabled
- Bit [5] of the CPSR register should always be 0 in this case!
-
- The instruction "MSR CPSR_c, #0b___" can be used to modify the CPSR control bits.
- Example: "MSR CPSR_c #0b11011111" diables both interrupts and sets processor mode to "system mode".
-
- The instruction "MRS CPSR_c, R__" can be used to read the CPSR control bits into a register.
- Example: "MRS CPSR_c R0" reads CPSR control bits for interrupts and processor mode into register R0.
-*****************************************************************************************************/
-// Write your system startup code here. Follow the steps in the description above!
-SYSTEM_START:
-    //1. Setup stack pointers for each used processor mode'
-    LDR R5,#0b01010011
-    LDR R6,#0b11010010
+_start:
+        //1. Setup stack pointers for each used processor mode'
+    MOV R1, #0b11010010 // interrupts masked, MODE = IRQ
+    MSR CPSR_c, R1 // change to IRQ mode
+    LDR SP, =0xFFFFFFFF - 3 // set IRQ stack to A9 onchip memory
+    /* Change to SVC (supervisor) mode with interrupts disabled */
+    MOV R1, #0b11010011 // interrupts masked, MODE = SVC
+    MSR CPSR, R1 // change to supervisor mode
+    LDR SP, =0x3FFFFFFF - 3 // set SVC stack to top of DDR3 memory
     
     //2. Configure the Generic Interrupt Controller (GIC). Use the given help function CONFIG_GIC!
     BL CONFIG_GIC
@@ -81,114 +78,60 @@ SYSTEM_START:
     LDR R0, =BUTTON_1 // pushbutton KEY base address
     MOV R1, #0xF // set interrupt mask bits
     STR R1, [R0, #0x8] // interrupt mask register (base + 8)
-
+    
     //4. Change to the processor mode for the main program loop (for example supervisor mode)
-    MOV R1, R5 // interrupts masked, MODE = SVC
-    MSR CPSR, R1 // change to supervisor mode
-    LDR SP, =0x3FFFFFFF - 3 // set SVC stack to top of DDR3 memory
+    MRS r0, CPSR
+    STMFD sp!, {r0}
+    MSR CPSR_c, #0x13
 
     //5. Enable the processor interrupts (IRQ in our case)
-    MOV R0, R6 // IRQ unmasked, MODE = SVC
+    MOV R0, #0b01010011 // IRQ unmasked, MODE = SVC
     MSR CPSR_c, R0
      //wait for interupt
-    loop:
-        b loop
-    
-/*******************************************************************
- Main program
-*******************************************************************/
-// Write code for your main program here
+    MOV R10, #0
+    LDR R12, =hexValues
 
-_start:
-    BL SYSTEM_START
-   
+/*******************************************************************
+Main program
+*******************************************************************/
+
+MAIN:
+	B MAIN
+	
+
+
+/* Define the exception service routines */
+/*--- Undefined instructions --------------------------------------------------*/
+SERVICE_UND:
+    B SERVICE_UND
+/*--- Software interrupts -----------------------------------------------------*/
 SERVICE_SVC:
     B SERVICE_SVC
-KEY_ISR:
-    LDR R0, =0xFF200050 // base address of pushbutton KEY port
-    LDR R1, [R0, #0xC] // read edge capture register
-    MOV R2, #0xF
-    STR R2, [R0, #0xC] // clear the interrupt
-    LDR R0, =0xFF200020 // based address of HEX display
-CHECK_KEY0:
-    MOV R3, #0x1
-    ANDS R3, R3, R1 // check for KEY0
-    BEQ CHECK_KEY1
-    MOV R2, #0b00111111
-    STR R2, [R0] // display "0"
-    B END_KEY_ISR
-CHECK_KEY1:
-    MOV R3, #0x2
-    ANDS R3, R3, R1 // check for KEY1
-    BEQ CHECK_KEY2
-    MOV R2, #0b00000110
-    STR R2, [R0] // display "1"
-    B END_KEY_ISR
-CHECK_KEY2:
-    MOV R3, #0x4
-    ANDS R3, R3, R1 // check for KEY2
-    BEQ IS_KEY3
-    MOV R2, #0b01011011
-    STR R2, [R0] // display "2"
-    B END_KEY_ISR
-IS_KEY3:
-    MOV R2, #0b01001111
-    STR R2, [R0] // display "3"
+/*--- Aborted data reads ------------------------------------------------------*/
+SERVICE_ABT_DATA:
+    B SERVICE_ABT_DATA
+/*--- Aborted instruction fetch -----------------------------------------------*/
+SERVICE_ABT_INST:
+    B SERVICE_ABT_INST
+/*--- IRQ ---------------------------------------------------------------------*/
 
-END_KEY_ISR:
-	BX LR
-
-
-/*******************************************************************
-    IRQ Interrupt Service Routine (ISR)
-    -----------------------------------
-
-The ISR  should:
-    1. Read and acknowledge the interrupt at the GIC.The GIC returns the interrupt ID.
-    2. Check which device raised the interrupt
-    3. Handle the specific device interrupt
-    4. Acknowledge the specific device interrupt
-    5. Inform the GIC that the interrupt is handled
-    6. Return from interrupt
-
-The following GIC CPU interface registers should be used (both v2/v1 alternative names showed below):
-    -Interrupt Acknowledge Register (GICC_IAR/ICCIAR)
-        Reading this register returns the interrupt ID corresponding to the I/O device.
-        This read acts as an acknowledge for the interrupt.
-    -End of Interrupt Register (GICC_EOIR/ICCEOIR)
-        Writing the corresponding interrupt ID to this register informs the GIC that
-        the interrupt is handled and clears the interrupt from the GIC CPU interface.
-
-How to handle a specific interrupt depends on the I/O device generating the interrupt.
-Read the documentation for your I/O device carefully!
-Every I/O device has a base address. Usually the I/O device has several registers
-(32 bit words on a 32 bit architecture) starting from the base address. Each register, and 
-often every bit in these registers, have a certain function and meaning. Look out for 
-how to read and/write to your device and also how to enable/disable interrupts from the device.
-
-Returning from an interrupt is done by using a special system level instruction:
-    SUBS PC, LR, #CONSTANT
-    where the CONSTANT depends on the specific interrupt (4 for IRQ).
-
-Finally, don't forget to push/pop registers used by this interrupt routine!
-
-*******************************************************************/
-// Write code for your IRQ interrupt service routine here
 SERVICE_IRQ:
-    PUSH {R0-R7, LR}
+    PUSH {R4-R5, LR}
+
+    /* Save the value of R10 on the stack */
     /* Read the ICCIAR from the CPU Interface */
     LDR R4, =0xFFFEC100
     LDR R5, [R4, #0x0C] // read from ICCIAR
-FPGA_IRQ1_HANDLER: //?????
+FPGA_IRQ1_HANDLER:
     CMP R5, #73
 UNEXPECTED:
     BNE UNEXPECTED // if not recognized, stop here
-    BL KEY_ISR
 EXIT_IRQ:
-/* Write to the End of Interrupt Register (ICCEOIR) */
+    /* Write to the End of Interrupt Register (ICCEOIR) */
     STR R5, [R4, #0x10] // write to ICCEOIR
-    POP {R0-R7, LR}
-    SUBS PC, LR, #4
+    /* Restore the value of R10 from the stack */
+    POP {R4-R5, LR}
+    BX LR
 
 
 
@@ -203,9 +146,6 @@ These interrupt routines can just "idle" if ever called...
 // Write code for your other interrupt service routines here
 
 //why
-SERVICE_FIQ:
-    B SERVICE_FIQ
-    .end
 
 
 /*******************************************************************
@@ -222,6 +162,7 @@ CONFIG_GIC:
     * 1. set the target to cpu0 in the ICDIPTRn register
     * 2. enable the interrupt in the ICDISERn register */
     /* CONFIG_INTERRUPT (int_ID (R0), CPU_target (R1)); */
+    MOV R0, #73 // KEY port (Interrupt ID = 73)
     MOV R1, #1 // this field is a bit-mask; bit 0 targets cpu0
     BL CONFIG_INTERRUPT
     /* configure the GIC CPU Interface */
@@ -285,3 +226,4 @@ CONFIG_INTERRUPT:
     POP {R4-R5, PC}
 
 .end
+	
