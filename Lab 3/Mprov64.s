@@ -1,5 +1,5 @@
 	.data
-headMsg:	.asciz	"Start av testprogram. Skriv in 5 tal!"
+headMsg: .asciz	"Start av testprogram. Skriv in 5 tal!"
 endMsg:	.asciz	"Slut pa testprogram"
 buf:	.space	64
 sum:	.quad	0

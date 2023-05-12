@@ -1,40 +1,92 @@
+
+# .intel_syntax noprefix
+
 .data
-resMsg: .asciz "fak=%d\n"
-buf: .asciz "xxxxxxxxx"
-endMsg: .asciz "slut\n"
+    input_buffer:   .space 64   
+    output_buffer:  .space 64
+    input_offset:   .quad 0
+    output_offset:  .quad 0
+    max_buffer:     .quad 64    # maximum size of a 64 bit buffer
+    output_string: .asciz "%s\n"
+    
+    #  functions for input
+    .global inImage
+    .global getInt
+    .global getText
+    .global getChar
+    .global getInPos
+    .global setInPos
+
+    #  functions for output
+    .global outImage
+    .global putInt
+    .global putText
+    .global putChar
+    .global getOutPos
+    .global setOutPos
 
 .text
-.global main
+# inmatningar
+inImage:
+    movq $0, input_offset   # Resets the offset back to 0
+    leaq input_buffer, %rdi # Points to the input_buffer
+    movq max_buffer, %rsi   # Sets the maximum characters to 64
+    mov  [stdin], %rdx      # Gets values from stdin
+    call fgets              # calls fgets
+    ret
+    
+getInt:
+    
+    ret
+getText:
+    ret
+getChar:
+    ret
+getInPos:
+    ret
+setInPos:
+    ret
 
-main:
-    pushq $0 #Stacken ska vara 16 bytes ”aligned”
-    movq $5, %rdi # Beräkna 5!
-    call fac
-    movq %rax, %rsi #Flytta returvärdet till argumentregistret (arg2)
-    movq $resMsg, %rdi # skriv ut Fak= ”resultat”, adr. till formatsträng i arg1
-    call printf
-# läs med fgets(buf,5,stdin)
-    movq $buf, %rdi # lägg i buf, adr. arg1
-    movq $5,%rsi # högst 5-1=4 tecken, arg2
-    movq stdin, %rdx # från standard input, arg3
-    call fgets
-    movq $buf, %rdi # adress till sträng i arg1
-    call printf # skriv ut buffert
-    movq $endMsg, %rdi # följd av slut
-    call printf
-    popq %rax
-    ret # avsluta programmet
+# <-------------------- utmatningar -------------------->
+outImage:
+    xor %rax, %rax
+    leaq output_buffer, %rdi
+    jmp puts
 
-    # Här finns funktionen fac = n! (rekursiv)
-fac:
-    cmpq $1,%rdi # if n>1
-    jle lBase
-    pushq %rdi # lägg anropsvärde på stacken
-    decq %rdi # räkna ned värdet med 1
-    call fac # temp = fakultet av (n-1)
-    popq %rdi # hämta från stack
-    imul %rdi,%rax # return n*temp
-    ret # Återvänd
-lBase:
-    movq $1,%rax # else return 1
-    ret # Återvänd
+putInt:
+    ret
+
+putText:
+    mov %rdi, %rcx     # Moving the message from %rdi to %rcx
+    mov $0, %rdi       # Setting %rdi back to 0
+
+    move_character_Loop:                # loop that checks if the text contains any NULL-terminators and put value in %dil to be send of to putChar function
+        movb (%rcx), %dil               # takes out each individual byte and assigns it to %dil
+        cmp $0, %dil                    # compares if the byte is a NULL-terminator
+        je return_move_character_loop   # if it doesnt contain null-terminator it will continue with the loop
+        call putChar                    # calls putChar
+        add $1, %rcx                    # increments %rcx so we can take out the next byte from the text
+        jmp move_character_Loop         # Jumps back to beginning of loop
+    
+    return_move_character_loop:
+        ret
+
+putChar:
+    movq output_offset, %rax    # moves the value from output_offset to %rax
+    leaq output_buffer, %rbx    # loads the address from output_buffer to %rbx
+    movb %dil, (%rbx, %rax, 1)  # Moves one byte to %dil
+    inc %rax                    # increments
+    mov %rax, output_offset     
+
+    cmp max_buffer, %rax
+    jl return_putChar
+    movq $0, %rax
+    mov %rax, output_offset
+    call outImage
+    return_putChar:
+        ret
+
+getOutPos:
+    ret
+setOutPos:
+    ret
