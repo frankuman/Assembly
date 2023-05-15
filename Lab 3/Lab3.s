@@ -7,7 +7,6 @@
     input_offset:   .quad 0
     output_offset:  .quad 0
     max_buffer:     .quad 64    # maximum size of a 64 bit buffer
-    output_string: .asciz "%s\n"
     
     #  functions for input
     .global inImage
@@ -28,13 +27,15 @@
 .text
 # inmatningar
 inImage:
-    movq $0, input_offset   # Resets the offset back to 0
+    movq $0, input_offset
     leaq input_buffer, %rdi # Points to the input_buffer
-    movq max_buffer, %rsi   # Sets the maximum characters to 64
-    mov  [stdin], %rdx      # Gets values from stdin
+    movq $64, %rsi          # Sets the maximum characters to 64
+    movq  stdin, %rdx        # Gets values from stdin
     call fgets              # calls fgets
+    leaq input_offset, %rax
+    movq $0, %rax
     ret
-    
+
 getInt:
 
     push %r10
@@ -52,21 +53,21 @@ _getIntGetNextValue:
     je _getIntInImage  # jump if equal
     cmpb $'\n', (%rdi)
     je _getIntInImage  # jump if equal
-    jmp _getIntCheckBlank # jump
+    # jmp _getIntCheckBlank # jump
 
 _getIntCheckBlank:
     cmpb $' ', (%rdi)   # compare binary to see if there is a space
     jne _getIntCheckPlus
 
-    addq $1, %rdi       # increment %rdi by 1
+    incq %rdi           # increment %rdi by 1
     incq %r10           # increment %r10 by 1
 
     jmp _getIntCheckBlank
 _getIntCheckPlus:
-    cmpb $'+', (%rdi)   # compare binary to see if there is a space
+    cmpb $'+', (%rdi)   # compare binary to see if there is a plus
     jne _getIntCheckMinus
 
-    addq $1, %rdi       # increment %rdi by 1
+    incq %rdi           # increment %rdi by 1
     incq %r10           # increment %r10 by 1
 
     jmp _getIntConvert
@@ -75,7 +76,7 @@ _getIntCheckMinus:
     jne _getIntConvert
     movq $1, %r11
 
-    addq $1, %rdi       # increment %rdi by 1
+    incq %rdi           # increment %rdi by 1
     incq %r10           # increment %r10 by 1
 _getIntConvert:
     cmpb $'0', (%rdi)
@@ -86,17 +87,17 @@ _getIntConvert:
     movzbq (%rdi), %r12
     subq $'0', %r12
     imulq $10, %rax
-    addq %r12, %rax
-
-    leaq 1(%rdi), %rdi
+    addq %r12,%rax
+    incq %rdi           # increment %rdi by 1
+    incq %r10           # increment %r10 by 1
+    # leaq 1(%rdi), %rdi
     incq %r12
 
     jmp _getIntConvert
 _getIntFlag:
-    cmpq $1, %r11         # Compare the value of %r13 with 1
-    jne _getIntEnd        # Jump to lEnd if %r13 is not equal to 1
-
-    negq %rax       # Negate the value in the %rax register
+    cmpq $1, %r11         # Compare the value of %R11 with 1
+    jne _getIntEnd        # Jump to lEnd if %r11 is not equal to 1
+    negq %rax             # Negate the value in the %rax register
 _getIntEnd:
     movq %r10, input_offset
     pop %r10 
@@ -171,44 +172,85 @@ Inposge:
 
 # <-------------------- utmatningar -------------------->
 outImage:
-    xor %rax, %rax
+    call putChar
+    movq $0,output_offset
     leaq output_buffer, %rdi
+    xor %rax, %rax
     jmp puts
+    
+
+# putInt:
+# 	movq    %rdi, %rdx
+# 	movq    $output_buffer, %rsi
+# 	movq    $0, %r8
+# 	movq    $10, %r11
+# 	xorq    %rax, %rax
+# 	movq    %rdx, %rax
+# checkNegInt:
+# 	cmpq	$0, %rdx
+# 	jge	putIntLoop
+# 	pushq	%rax
+# 	call	getOutPos
+# 	movb	$'-', (%rsi, %rax)
+# 	incq	%rax
+# 	movq	%rax, output_offset
+# 	popq	%rax
+# 	negq	%rax
+# putIntLoop:
+# 	xorq    %rdx, %rdx
+# 	idivq   %r11
+# 	addq    $48, %rdx
+# 	pushq   %rdx
+# 	subq    $48, %rdx
+# 	incq    %r8
+# 	cmpq    $0, %rax
+# 	jg      putIntLoop
+# 	call    getOutPos
+# outIntLoop:
+# 	cmpq	$64, %rax
+# 	jne     addToOutbuf
+# 	pushq	%rdi
+# 	pushq	%rax
+# 	call    outImage
+# 	popq 	%rax
+# 	popq 	%rdi
+# addToOutbuf:
+# 	popq    %rdx
+# 	movb    %dl, %r10b
+# 	movb 	%r10b, (%rsi, %rax)
+# 	decq    %r8
+# 	incq    %rax
+# 	cmpq    $0,%r8
+# 	je      putIntEnd
+# 	jmp     outIntLoop
+# putIntEnd:
+# 	movq 	%rax, output_offset
+# 	ret
+
 
 putInt:
     pushq $0
-    movq $0, %r10       #
-    movq $10, %r12      # Set the divisor to 10
-    xorq %rax, %rax     # bitwise XOR operation
-    cmpq %r10, %rdx
-    jl _putIntnegative
-_putIntNegRet:
+    movq $10, %r12       # Set the divisor to 10
     movq %rdi, %rax
-_putIntCovert:
-    xorq %rdi,%rdi      # zero out %rdx
-    cqto                # %rax will be set to 1 (indicating a negative value)
-    idivq %r12          # %rax % 10
-    addq $'0', %rdx
-    pushq %rdx
 
-    cmpq $0, %rax
-    je _putIntinBuffer
-    jmp _putIntCovert
+_putIntConvert:
+    cqto                 
+    idivq %r12           # %rsi % 10 (RAX = 0, RDX = 5)
+    addq $'0', %rdx      # converts to ASCII
+    pushq %rdx           # push 5
+
+    cmpq $0, %rax        # check if rax = 0, aka 1 digit
+    je _putIntinBuffer   # putinbuffer
+    jmp _putIntConvert
 _putIntinBuffer:
-    popq %rdi
-    cmpq %r10, %rdi
+    popq %rdi            # will be useful in neg case
+    cmpq $0, %rdi        # compare with 0
     je _putIntreturn
-    call putChar
+    call putChar          
     jmp _putIntinBuffer
-_putIntnegative:
-    pushq %rdx
-    movq  $'-', %rdx
-    call putChar
-    popq %rdx
-    negq %rdx
-    jmp _putIntNegRet
 _putIntreturn:
     ret
+
 
 putText:
     mov %rdi, %rcx     # Moving the message from %rdi to %rcx
@@ -227,18 +269,23 @@ putText:
 
 putChar:
     movq output_offset, %rax    # moves the value from output_offset to %rax
-    leaq output_buffer, %rbx    # loads the address from output_buffer to %rbx
-    movb %dil, (%rbx, %rax, 1)  # Moves one byte to %dil
-    inc %rax                    # increments
-    mov %rax, output_offset     
 
-    cmp max_buffer, %rax
-    jl return_putChar
-    movq $0, %rax
-    mov %rax, output_offset
+    cmpq $64, output_offset
+    jge overflow_putChar
+
+    leaq output_buffer, %rdx    # loads the address from output_buffer to %rbx
+
+    movq %rdi, (%rdx, %rax)
+
+
+    incq %rax
+    movq %rax, output_offset
+    jmp _putCharreturn
+
+overflow_putChar:
     call outImage
-    return_putChar:
-        ret
+_putCharreturn:
+    ret
 
 getOutPos:
     movq $output_offset, %rax
@@ -246,14 +293,15 @@ getOutPos:
 setOutPos:
     cmpq $0, %rdi               # kollar ifall mindre än 0
     jle _lessThan
-    cmpq	$64,%rdi			# kollar ifall större än 64
-    jg _moreThan
+    cmpq $63,%rdi			# kollar ifall större än 64
+    jge _moreThan
+    movq %rdi, output_offset
     ret
 _lessThan:
     movq $0,%rdi
     movq %rdi, output_offset
     ret
 _moreThan:
-    movq $64,%rdi
+    movq $63,%rdi
     movq %rdi, output_offset
     ret
