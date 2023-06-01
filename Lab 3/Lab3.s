@@ -1,3 +1,6 @@
+# Oliver Bölin & Philippe Van Daele
+# Lab 3
+# 2023-06-01
 
 .data
     input_buffer:   .space 64   
@@ -25,13 +28,13 @@
 .text
 # inmatningar
 inImage:
-    movq $0, input_offset
-    leaq input_buffer, %rdi     # Points to the input_buffer
+    movq $0, input_offset       # assigns input_offset to 0
+    leaq input_buffer, %rdi     # loads the address of input_buffer to %rdi, points to input_buffer
     movq $64, %rsi              # Sets the maximum characters to 64
-    movq  stdin, %rdx           # Gets values from stdin
+    movq stdin, %rdx            # Gets values from stdin
     call fgets                  # calls fgets
-    leaq input_offset, %rax
-    movq $0, %rax
+    leaq input_offset, %rax     # loads the address of input_offset to %rax
+    movq $0, %rax               # resetting %rax back to zero
     ret
 
 getInt:
@@ -40,48 +43,51 @@ getInt:
     push %r12
 
 _getIntGetNextValue:
-    leaq input_buffer, %rax
-    movq input_offset, %r10
-    leaq (%rax, %r10), %rdi     # Current buffer position
+    leaq input_buffer, %rax     # loads the address of input_buffer to %rax
+    movq input_offset, %r10     # assigns the value of input_offset to %r10
+    leaq (%rax, %r10), %rdi     # loads the current buffer position into %rdi
     movq $0, %rax               # the value
     movq $0, %r11               # the sign
-    movzbq (%rdi), %r12
-    cmpb $0, (%rdi)
+    movzbq (%rdi), %r12         # Moves the byte at current buffer position into the %r12, zero-extending it to a quadword.
+    cmpb $0, (%rdi)             # compares the value if it is null-terminator
     je _getIntInImage           # jump if equal
-    cmpb $'\n', (%rdi)
+    cmpb $'\n', (%rdi)          # compares the value if it contains a newline
     je _getIntInImage           # jump if equal
 
 _getIntCheckBlank:
-    cmpb $' ', (%rdi)           # compare binary to see if there is a space
-    jne _getIntCheckPlus
+    cmpb $' ', (%rdi)           # compares the binary value to see if there is a space
+    jne _getIntCheckPlus        # jumps to check if plussign
 
     incq %rdi                   # increment %rdi by 1
     incq %r10                   # increment %r10 by 1
 
     jmp _getIntCheckBlank
+
 _getIntCheckPlus:
-    cmpb $'+', (%rdi)           # compare binary to see if there is a plus
+    cmpb $'+', (%rdi)           # compare the binary value to see if there is a plus sign
     jne _getIntCheckMinus
 
     incq %rdi                   # increment %rdi by 1
     incq %r10                   # increment %r10 by 1
 
     jmp _getIntConvert
+
 _getIntCheckMinus:
-    cmpb $'-', (%rdi)           # compare binary to see if there is a space
+    cmpb $'-', (%rdi)           # compare the binary value to see if there is a minus sign
     jne _getIntConvert
     movq $1, %r11
 
     incq %rdi                   # increment %rdi by 1
     incq %r10                   # increment %r10 by 1
-_getIntConvert:
-    cmpb $'0', (%rdi)
-    jl  _getIntFlag            # If less than 0 we need to do something
-    cmpb $'9', (%rdi)
-    jg _getIntFlag             # If more than 9 we need to do something
 
-    movzbq (%rdi), %r12
-    subq $'0', %r12
+_getIntConvert:
+    cmpb $'0', (%rdi)           # If value is less than 0 it jumps to _getIntFlag to see if minus sign was used
+    jl _getIntFlag              
+    cmpb $'9', (%rdi)
+    jg _getIntFlag              # If more than 9 we negate the value
+
+    movzbq (%rdi), %r12         # Moves the byte at current buffer position into the %r12, zero-extending it to a quadword.
+    subq $'0', %r12             
     imulq $10, %rax
     addq %r12,%rax
     incq %rdi                   # increment %rdi by 1
@@ -90,7 +96,7 @@ _getIntConvert:
 
     jmp _getIntConvert
 _getIntFlag:
-    cmpq $1, %r11               # Compare the value of %R11 with 1
+    cmpq $1, %r11               # Compare the value of %R11 with 1 to see if it contains a minus
     jne _getIntEnd              # Jump to lEnd if %r11 is not equal to 1
     negq %rax                   # Negate the value in the %rax register
 _getIntEnd:
@@ -101,29 +107,27 @@ _getIntEnd:
     ret
 
 _getIntInImage:
-    pushq %rax
-    call inImage
-    popq %rax
-    jmp _getIntGetNextValue
+    pushq %rax                  # Push %rax
+    call inImage                # Calls inImage to reset the buffer
+    popq %rax                   # Pops %rax 
+    jmp _getIntGetNextValue     
 
-# RSI: Tecken
-# RDI: Buffer
 getText:
-    pushq %r10
-    movq $0, %r10
-    movq input_offset, %rcx
-    incq %rcx                   # skip the space
-    leaq input_buffer, %rax
+    pushq %r10                  # Push r10 into the stack
+    movq $0, %r10               # Assigns %r10 with 0
+    movq input_offset, %rcx     # Moves the value from input_offset to %rcx
+    incq %rcx                   # skips the space that is in the buffer
+    leaq input_buffer, %rax     # Loads %rax with the address from input_buffer
     movq (%rax, %rcx), %rdx     # get address of buffer and offset, put at rdx
     cmpq $0, %rdx               # check if not 0
     je inImage
 _getTextLoop:
-    cmpq $0, %rsi
+    cmpq $0, %rsi               # Check if not 0
     je _returnGetText
     movq (%rax, %rcx), %rdx     # Move the value at address (rax + rcx) to rdx register
-    incq %rcx
+    incq %rcx                   # Increments %rcx
     movq %rdx, (%rdi)           # Move the value of rdx to the address pointed by rdi
-    incq %r10
+    incq %r10                   # Increments %r10
     cmpb $0, (%rdi)             # Compare the value at the address pointed by rdi with 0
     je _returnGetText
     decq %rsi
@@ -136,23 +140,24 @@ _returnGetText:
     ret
 
 getChar:
-    pushq %rax 
-    call getInPos               # get pos
-    cmpq $0, %rax               # if 0 we call inimage
+    pushq %rax                  
+    call getInPos               # gets the position of the input_offset
+    cmpq $0, %rax               # if 0, we call inImage
     je inImage
-    cmpq $0, input_buffer       # if emtpy we call inimage
+    cmpq $0, input_buffer       # if empty, we call inImage
     je inImage
-    incq %rax                   # increment
-    movq %rax, input_offset 
-    pop %rax
+    incq %rax                   # increment %rax
+    movq %rax, input_offset     # Moves the offset back into input_offset
+    pop %rax                    
     ret
+
 getInPos:
-    movq input_offset, %rax
+    movq input_offset, %rax     # Returns the offset to %rax
     ret
 
 setInPos:
-    cmpq  $0, %rdi
-    jle _inPosLessThan
+    cmpq  $0, %rdi              # 
+    jle _inPosLessThan          
     cmpq $63, %rdi
     jge inPosMoreThan
     movq %rdi, input_offset
@@ -166,88 +171,83 @@ inPosMoreThan:
 
 # <-------------------- utmatningar -------------------->
 outImage:
+    movq $0, %r10
+    pushq %r10
     movq $output_offset, %rax
-    xor %rax, %rax
+    xor %rax, %rax              # Set rax to 0
     leaq output_buffer, %rdi
     movq $0, output_offset
-    jmp puts
+    call puts
+    popq %r10
+    ret
 
 putInt:
     pushq $0
-    movq $10, %r10       # Set the divisor to 10
+    movq $10, %r10              # Set the divisor to 10
 _putIntCheckNegative:
     cmpq $0, %rdi
     jl _putIntnegative
 _putIntRDItoRAX:
     movq %rdi, %rax
     cmpq %r10, %rax
-    jl _putIntOneDigit   # We dont divide if 0
+    jl _putIntOneDigit          # We dont divide if 0
 _putIntConvert:
     cqto                 
-    idivq %r10           # %rsi % 10 (RAX = 0, RDX = 5) Signed divide %rdx:%rax by S
+    idivq %r10                  # %rsi % 10 (RAX = 0, RDX = 5) Signed divide %rdx:%rax by S
 _putIntCheckZero:
-    addq $48, %rdx       # $48 = '0' converts to ASCII
-    pushq %rdx           # push 5
-    cmpq $0, %rax        # check if rax = 0, aka 1 digit
-    je _putIntinBuffer   # if zero we can put it in the buffer
+    addq $48, %rdx              # $48 = '0' converts to ASCII
+    pushq %rdx                  # push 5
+    cmpq $0, %rax               # check if rax = 0, aka 1 digit
+    je _putIntinBuffer          # if zero we can put it in the buffer
     jmp _putIntConvert
 _putIntinBuffer:
-    popq %rdi            # will be useful in neg case
-    cmpq $0, %rdi        # compare with 0
+    popq %rdi                   # will be useful in neg case
+    cmpq $0, %rdi               # compare with 0
     je _putIntreturn
     call putChar          
     jmp _putIntinBuffer
-_putIntnegative:         # puts in a negative ascii into rdi and pushes it into buffer via putchar
+_putIntnegative:                # puts in a negative ascii into rdi and pushes it into buffer via putchar
     pushq %rdi
-    movq $45,%rdi        # 45 = '-' converts to ASCII 
+    movq $45,%rdi               # 45 = '-' converts to ASCII 
     call putChar
     popq %rdi
     negq %rdi
     jmp _putIntRDItoRAX
 _putIntOneDigit:
-    movq %rax, %rdx     # move RAX to RDX
-    movq $0, %rax       # set RAX to 0 to implicate one digit
+    movq %rax, %rdx             # move RAX to RDX
+    movq $0, %rax               # set RAX to 0 to implicate one digit
     jmp _putIntCheckZero
 _putIntreturn:
     ret
 
-
 putText:
-    mov %rdi, %rcx     # Moving the message from %rdi to %rcx
-    mov $0, %rdi       # Setting %rdi back to 0
+    mov %rdi, %rcx               # Moving the message from %rdi to %rcx
+    mov $0, %rdi                 # Setting %rdi back to 0
 
-    move_character_Loop:                # loop that checks if the text contains any NULL-terminators and put value in %dil to be send of to putChar function
-        movb (%rcx), %dil               # takes out each individual byte and assigns it to %dil
-        cmp $0, %dil                    # compares if the byte is a NULL-terminator
-        je return_move_character_loop   # if it doesnt contain null-terminator it will continue with the loop
-        call putChar                    # calls putChar
-        add $1, %rcx                    # increments %rcx so we can take out the next byte from the text
-        jmp move_character_Loop         # Jumps back to beginning of loop
+_moveCharacterLoop:              # loop that checks if the text contains any NULL-terminators and put value in %dil to be send of to putChar function
+    movb (%rcx), %dil            # takes out each individual byte and assigns it to %dil
+    cmp $0, %dil                 # compares if the byte is a NULL-terminator
+    je _retMoveCharacterLoop     # if it doesnt contain null-terminator it will continue with the loop
+    call putChar                 # calls putChar
+    add $1, %rcx                 # increments %rcx so we can take out the next byte from the text
+    jmp _moveCharacterLoop       # Jumps back to beginning of loop
     
-    return_move_character_loop:
-        ret
+_retMoveCharacterLoop:
+    ret
 
-# Rutinen ska lägga tecknet c i utbufferten och flytta fram aktuell position i den ett steg.
-# Om bufferten blir full när getChar anropas ska ett anrop till outImage göras, så att man
-# får en tömd utbuffert att jobba vidare mot.
-# Parameter: tecknet som ska läggas i utbufferten (c i texten)
 putChar:
-    movq output_offset, %rax    # moves the value from output_offset to %rax
-
+    movq output_offset, %rax     # moves the value from output_offset to %rax
     cmpq $64, %rax
     jge overflow_putChar
-
-    leaq output_buffer, %rdx    # loads the address from output_buffer to %rdx
-
+    leaq output_buffer, %rdx     # loads the address from output_buffer to %rdx
     movq %rdi, (%rdx, %rax)
 
-
-    incq %rax                   # increment the pointer since we put a char in the buffer
+    incq %rax                    # increment the pointer since we put a char in the buffer
     movq %rax, output_offset
     jmp _putCharreturn
 
 overflow_putChar:
-    movq $0, output_offset # reset the pointer since we're emptying
+    movq $0, output_offset       # reset the pointer since we're emptying
     call outImage
 _putCharreturn:
     ret
@@ -257,9 +257,9 @@ getOutPos:
     ret
 
 setOutPos:
-    cmpq $0, %rdi           # kollar ifall mindre än 0
+    cmpq $0, %rdi                # Checks if value is less than 0
     jle _lessThan
-    cmpq $63,%rdi			# kollar ifall större än 64
+    cmpq $63,%rdi			     # Checks if value is greater than 64
     jge _moreThan
     movq %rdi, output_offset
     ret
